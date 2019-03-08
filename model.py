@@ -64,8 +64,9 @@ class Cluster:
         self.__forward = None
         self.__backward = None
         self.__targets = Counter()
-        self.__qnodes = Counter()
         self.__qnodesURL = {}
+        self.__qnodesLabel = {}
+        self.__qnodesAliases = {}
 
     @property
     def href(self):
@@ -108,15 +109,9 @@ class Cluster:
         return len(self.targets)
 
     @property
-    def qnodes(self):
-        if not self.__qnodes:
-            self._init_qnodes()
-        return self.__qnodes.most_common()
-
-    @property
     def qnodesURL(self):
         if not self.__qnodesURL:
-            self._init_qnodes()
+            self._init_cluster_members()
         return self.__qnodesURL
 
     @property
@@ -213,27 +208,26 @@ WHERE {
 }
 GROUP BY ?member ?type ?target """
         for member, label, type_, target in sparql.query(query, namespaces, {'cluster': self.uri}):
-            self.__members.append(ClusterMember(member, label, type_, target))
             if target:
-                self.__targets[str(target)] += 1
+                target = str(target)
+                target = target[target.find(':')+1:]
+                if "NIL" not in target:
+                    target = '/' + target.replace('.', '/')
+                self.__targets[target] += 1
+            self.__members.append(ClusterMember(member, label, type_, target))
 
-    def _init_qnodes(self):
-        for target, count in self.targets:
-            if ":NIL" not in target:
-                fbid = '/' + target[target.find(':')+1:].replace('.', '/')
-                query = """
-                    SELECT ?qid ?label WHERE {
-                      ?qid wdt:P646 ?freebase .
-                      ?qid rdfs:label ?label filter (lang(?label) = "en") .
-                    }
-                    LIMIT 1
-                """
-                for qid, label in wikidata_sparql.query(query, namespaces, {'freebase': Literal(fbid)}):
-                    qnodeURL = str(qid)
-                    qid = qnodeURL.rsplit('/', 1)[1]
-                    self.__qnodes[qid] = count
-                    if qid not in self.__qnodesURL:
-                        self.__qnodesURL[qid] = qnodeURL
+        for member in self.__members:
+            target = member.target
+            if 'NIL' not in target:
+                if target not in self.__qnodesURL:
+                    self.__qnodesURL[target] = member.qURL
+                    self.__qnodesLabel[target] = member.qLabel
+                    self.__qnodesAliases[target] = member.qAliases
+                else:
+                    # trying to reduce number of queries
+                    member.set_qnode_url(self.__qnodesURL[target])
+                    member.set_qnode_label(self.__qnodesLabel[target])
+                    member.set_qnode_aliases(self.__qnodesAliases[target])
 
     def _init_forward_clusters(self):
         query = """
@@ -307,7 +301,6 @@ class ClusterMember:
         self.__all_labels = None
         self.__type = type_
         self.__target = target
-        self.__qid = None
         self.__qLabel = None
         self.__qAliases = None
         self.__qURL = None
@@ -359,10 +352,13 @@ class ClusterMember:
         return self.__target
 
     @property
-    def qid(self):
-        if self.__qid is None and self.target:
+    def qURL(self):
+        if self.__qURL is None and self.target:
             self._init_qNode()
-        return self.__qid
+        return self.__qURL
+
+    def set_qnode_url(self, url):
+        self.__qURL = url
 
     @property
     def qLabel(self):
@@ -370,40 +366,37 @@ class ClusterMember:
             self._init_qNode()
         return self.__qLabel
 
+    def set_qnode_label(self, label):
+        self.__qLabel = label
+
     @property
     def qAliases(self):
         if self.__qAliases is None and self.target:
             self._init_qNode()
         return self.__qAliases
 
+    def set_qnode_aliases(self, aliases):
+        self.__qAliases = aliases
+
     def _init_qNode(self):
-        target = self.target
-        self.__qid = False
+        self.__qURL = False
         self.__qLabel = False
         self.__qAliases = False
 
-        if target and ":NIL" not in target:
-            fbid = '/' + target[target.find(':')+1:].replace('.', '/')
+        if self.target and "NIL" not in self.target:
             query = """
-                SELECT ?qid ?label WHERE {
+                SELECT ?qid ?label ?alias WHERE {
                   ?qid wdt:P646 ?freebase .
                   ?qid rdfs:label ?label filter (lang(?label) = "en") .
-                }
-                LIMIT 1
-            """
-            for qid, label in wikidata_sparql.query(query, namespaces, {'freebase': Literal(fbid)}):
-                self.__qURL = str(qid)
-                self.__qid = self.__qURL.rsplit('/', 1)[1]
-                self.__qLabel = label
-
-            query = """
-                SELECT ?qid ?alias WHERE {
-                  ?qid wdt:P646 ?freebase .
                   ?qid skos:altLabel ?alias filter (lang(?alias) = "en") .
                 }
             """
             aliases = []
-            for qid, alias in wikidata_sparql.query(query, namespaces, {'freebase': Literal(fbid)}):
+            for qid, label, alias in wikidata_sparql.query(query, namespaces, {'freebase': Literal(self.target)}):
+                if not self.__qURL:
+                    self.__qURL = str(qid)
+                if not self.__qLabel:
+                    self.__qLabel = label
                 aliases.append(str(alias))
             self.__qAliases = ', '.join(aliases)
 
@@ -485,7 +478,13 @@ LIMIT 1 """
                 _, label = split_uri(type_)
             self.__label = label
             self.__type = type_
-            self.__target = target if target else False
+            if target:
+                target = target[target.find(':')+1:]
+                if "NIL" not in target:
+                    target = '/' + target.replace('.', '/')
+                self.__target = target
+            else:
+                target = False
 
     def _init_source(self):
         query = """

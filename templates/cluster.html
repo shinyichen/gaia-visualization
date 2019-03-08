@@ -14,13 +14,13 @@
         <li>Targets:</li>
         <ul>
         {% for target, count in cluster.targets %}
-          <li>{{ target }}: {{ count }}x</li>
+          {% if target in cluster.qnodesURL %}
+            <li><a href="{{ cluster.qnodesURL[target] }}">{{ target }}</a>: {{ count }}x</li>
+          {% else %}
+            <li>{{ target }}: {{ count }}x</li>
+          {% endif %}
         {% endfor %}
         </ul>
-        <li>QNodes:
-        {% for qnode, count in cluster.qnodes %}
-          <a href="{{ cluster.qnodesURL[qnode] }}">{{ qnode }}</a> ({{ count }}) &nbsp;
-        {% endfor %}
         {% if target_limit and cluster.targetsSize > target_limit %}
             <a href="{{ cluster.href }}?image={{ show_image }}&limit={{ show_limit }}&targetLimit=false">Show all targets</a>
         {% endif %}
@@ -74,12 +74,13 @@
                 </li>
             {% endif %}
             {% if member.target %}
+              {% if member.qURL %}
+                <li>Target: <a href={{ member.qURL }}>{{ member.target }}</a></li>
+                <li>WD Label: {{ member.qLabel }}</li>
+                <li>WD Aliases: {{ member.qAliases }}</li>
+              {% else %}
                 <li>Target: {{ member.target }}</li>
-                {% if member.qid %}
-                  <li>WD QID: <a href={{ member.qURL }}>{{ member.qid }}</a></li>
-                  <li>WD Label: {{ member.qLabel }}</li>
-                  <li>WD Aliases: {{ member.qAliases }}</li>
-                {% endif %}
+              {% endif %}
             {% endif %}
             </ul>
         {% endif %}
