@@ -17,13 +17,17 @@
           <li>{{ target }}: {{ count }}x</li>
         {% endfor %}
         </ul>
-        <li>QNodes:
+        <li>QNodes:</li>
         {% for qnode, count in cluster.qnodes %}
           <a href="{{ cluster.qnodesURL[qnode] }}">{{ qnode }}</a> ({{ count }}) &nbsp;
         {% endfor %}
         {% if target_limit and cluster.targetsSize > target_limit %}
             <a href="{{ cluster.href }}?image={{ show_image }}&limit={{ show_limit }}&targetLimit=false">Show all targets</a>
         {% endif %}
+        <li>Sources:</li>
+        {% for source, counter in cluster.sources %}
+            {{ source }} ({{ counter}})
+        {% endfor %}
 
     </ul>
     {% if show_image %}

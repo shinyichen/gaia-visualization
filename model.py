@@ -66,6 +66,7 @@ class Cluster:
         self.__targets = Counter()
         self.__qnodes = Counter()
         self.__qnodesURL = {}
+        self.__sources = Counter()
 
     @property
     def href(self):
@@ -118,6 +119,12 @@ class Cluster:
         if not self.__qnodesURL:
             self._init_qnodes()
         return self.__qnodesURL
+
+    @property
+    def sources(self):
+        if not self.__sources:
+            self._init_sources()
+        return self.__sources.most_common()
 
     @property
     def size(self):
@@ -234,6 +241,10 @@ GROUP BY ?member ?type ?target """
                     self.__qnodes[qid] = count
                     if qid not in self.__qnodesURL:
                         self.__qnodesURL[qid] = qnodeURL
+
+    def _init_sources(self):
+        for m in self.members:
+            self.__sources[m.source] += 1
 
     def _init_forward_clusters(self):
         query = """
@@ -520,7 +531,7 @@ ORDER BY ?start """
         return self.uri.__hash__()
 
 
-ClusterSummary = namedtuple('ClusterSummary', ['uri', 'href', 'label', 'count'])
+ClusterSummary = namedtuple('ClusterSummary', ['uri', 'href', 'label', 'count', 'sources'])
 
 
 def get_cluster_list(type_=None, limit=10, offset=0, sortby='size'):
@@ -536,6 +547,17 @@ WHERE {
 GROUP BY ?cluster ?label
 ORDER BY order_by
 """
+
+    query_sources = """
+SELECT DISTINCT ?source
+WHERE {
+    ?membership aida:cluster ?cluster ;
+        aida:clusterMember ?member .
+    ?member aida:justifiedBy ?justification .
+    ?justification aida:source ?source .
+}
+"""
+
     if type_ == AIDA.Entity:
         query = query.replace('?type', type_.n3())
         query = query.replace('label_string', '?prototype aida:hasName ?label .')
@@ -552,10 +574,13 @@ ORDER BY order_by
     if offset:
         query += " OFFSET " + str(offset)
     for u, l, c in sparql.query(query, namespaces):
+        sources = []
+        for row in sparql.query(query_sources, namespaces, {'cluster': URIRef(u)}):
+            sources.append(str(row.source))
         if isinstance(l, URIRef):
             _, l = split_uri(l)
         yield ClusterSummary(u, u.replace('http://www.isi.edu/gaia', '/cluster').replace(
-          'http://www.columbia.edu', '/cluster'), l, c)
+          'http://www.columbia.edu', '/cluster'), l, c, sources)
 
 
 if __name__ == '__main__':

@@ -9,9 +9,20 @@
     {% if type_ == "event" %}
       <p>Sort by <a href="/list/{{ type_ }}?sortby=type">Event Type</a> | <a href="/list/{{ type_ }}?sortby=size">Cluster Size</a>
     {% endif %}
+    <ul>
     {% for cluster in clusters %}
-        <li>{{ cluster.label }} [{{ cluster.count }}] (<a href="{{ cluster.href }}">{{ cluster.uri }}</a>)</li>
+        <li>
+            {{ cluster.label }} [{{ cluster.count }}] (<a href="{{ cluster.href }}">{{ cluster.uri }}</a>)
+            {% if type_ == 'event' %}
+                <br>Sources:
+                {% for source in cluster.sources %}
+                    {{ source }}
+                {% endfor %}
+            {% endif %}
+        </li>
+
     {% endfor %}
+    </ul>
 {% if offset > limit %}
     <a href="/list/{{ type_ }}?limit={{ limit }}&offset={{ offset-limit }}&sortby={{ sortby }}">Prev page</a>
 {% elif offset > 0 %}
