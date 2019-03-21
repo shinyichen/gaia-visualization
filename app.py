@@ -1,5 +1,5 @@
 from flask import Flask, render_template, abort, request
-from model import get_cluster, get_cluster_list, types, recover_doc_online
+from model import get_cluster, get_event_types, get_cluster_list, types, recover_doc_online
 from report import Report
 from setting import name
 
@@ -52,12 +52,12 @@ def show_entity_cluster_list(type_):
     limit = request.args.get('limit', default=100, type=int)
     offset = request.args.get('offset', default=0, type=int)
     sortby = request.args.get('sortby', default='size')
+    event = request.args.get('event', default='all')
     if type_ == 'entity':
         return render_template('list.html',
                                type_='entity',
                                limit=limit,
                                offset=offset,
-                               sortby=sortby,
                                clusters=get_cluster_list(types.Entity, limit, offset, sortby))
     elif type_ == 'event':
         return render_template('list.html',
@@ -65,7 +65,9 @@ def show_entity_cluster_list(type_):
                                limit=limit,
                                offset=offset,
                                sortby=sortby,
-                               clusters=get_cluster_list(types.Events, limit, offset, sortby))
+                               event=event,
+                               event_types=get_event_types(),
+                               clusters=get_cluster_list(types.Events, limit, offset, sortby, event))
     else:
         abort(404)
 

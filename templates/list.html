@@ -7,7 +7,21 @@
 <body>
 <h1>{% if type_ == "entity" %} Entity list {% else %} Event list {% endif %}</h1>
     {% if type_ == "event" %}
-      <p>Sort by <a href="/list/{{ type_ }}?sortby=type">Event Type</a> | <a href="/list/{{ type_ }}?sortby=size">Cluster Size</a>
+        <select onchange="location=this.value;">
+            {% if event=="all" %}
+                <option value="/list/{{ type_ }}?sortby={{ sortby }} &event=all" selected>All Event Types</option>
+            {% else %}
+                <option value="/list/{{ type_ }}?sortby={{ sortby }} &event=all">All Event Types</option>
+            {% endif %}
+            {% for e in event_types %}
+                {% if event==e %}
+                    <option value="/list/{{ type_ }}?sortby=size&event={{ e }}" selected>{{ e }}</option>
+                {% else %}
+                    <option value="/list/{{ type_ }}?sortby=size&event={{ e }}">{{ e }}</option>
+                {% endif %}
+            {% endfor %}
+        </select>
+        <p>Sort by <a href="/list/{{ type_ }}?sortby=type&event=all">Event Type</a> | <a href="/list/{{ type_ }}?sortby=size&event={{ event }}">Cluster Size</a>
     {% endif %}
     <ul>
     {% for cluster in clusters %}
@@ -20,14 +34,25 @@
                 {% endfor %}
             {% endif %}
         </li>
-
     {% endfor %}
     </ul>
 {% if offset > limit %}
-    <a href="/list/{{ type_ }}?limit={{ limit }}&offset={{ offset-limit }}&sortby={{ sortby }}">Prev page</a>
+    {% if type_ == "entity" %}
+        <a href="/list/{{ type_ }}?limit={{ limit }}&offset={{ offset-limit }}">Prev page</a>
+    {% else %}
+        <a href="/list/{{ type_ }}?limit={{ limit }}&offset={{ offset-limit }}&sortby={{ sortby }}&event={{ event }}">Prev page</a>
+    {% endif %}
 {% elif offset > 0 %}
-    <a href="/list/{{ type_ }}?limit={{ limit }}&sortby={{ sortby }}">Prev page</a>
+    {% if type_ == "entity" %}
+        <a href="/list/{{ type_ }}?limit={{ limit }}">Prev page</a>
+    {% else %}
+        <a href="/list/{{ type_ }}?limit={{ limit }}&sortby={{ sortby }}&event={{ event }}">Prev page</a>
+    {% endif %}
 {% endif %}
-<a href="/list/{{ type_ }}?limit={{ limit }}&offset={{ offset+limit }}&sortby={{ sortby }}">Next page</a>
+{% if type_ == "entity" %}
+    <a href="/list/{{ type_ }}?limit={{ limit }}&offset={{ offset+limit }}">Next page</a>
+{% else %}
+    <a href="/list/{{ type_ }}?limit={{ limit }}&offset={{ offset+limit }}&sortby={{ sortby }}&event={{ event }}">Next page</a>
+{% endif %}
 </body>
 </html>

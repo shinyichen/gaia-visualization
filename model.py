@@ -10,11 +10,14 @@ sparql = SPARQLStore(endpoint)
 wikidata_sparql = SPARQLStore(wikidata_endpoint)
 AIDA = Namespace('https://tac.nist.gov/tracks/SM-KBP/2018/ontologies/InterchangeOntology#')
 WDT = Namespace('http://www.wikidata.org/prop/direct/')
+LDCONT = Namespace('https://tac.nist.gov/tracks/SM-KBP/2018/ontologies/SeedlingOntology#')
+
 namespaces = {
     'aida': AIDA,
     'rdf': RDF,
     'skos': SKOS,
-    'wdt': WDT
+    'wdt': WDT,
+    'ldcont': LDCONT
 }
 try:
   pickled = pickle.load(open('cluster.pkl', 'rb'))
@@ -27,6 +30,21 @@ def get_cluster(uri):
     if Cluster.ask(uri):
         return Cluster(uri)
     return None
+
+
+def get_event_types():
+    query="""
+SELECT DISTINCT ?label
+WHERE {
+    ?cluster aida:prototype ?prototype .
+    ?prototype a aida:Event .
+    ?s rdf:subject ?prototype ; rdf:predicate rdf:type ; rdf:object ?label .
+}
+"""
+    for row in sparql.query(query, namespaces):
+        uri = row.label
+        _, label = split_uri(uri)
+        yield label
 
 
 def recover_doc_online(doc_id):
@@ -534,7 +552,9 @@ ORDER BY ?start """
 ClusterSummary = namedtuple('ClusterSummary', ['uri', 'href', 'label', 'count', 'sources'])
 
 
-def get_cluster_list(type_=None, limit=10, offset=0, sortby='size'):
+def get_cluster_list(type_=None, limit=10, offset=0, sortby='size', event_filter=None):
+    if event_filter == 'all':
+        event_filter = None
     query = """
 SELECT ?cluster ?label (COUNT(?member) AS ?memberN)
 WHERE {
@@ -564,23 +584,33 @@ WHERE {
         query = query.replace('order_by', 'DESC(?memberN)')
     if type_ == AIDA.Event:
         query = query.replace('?type', type_.n3())
-        query = query.replace('label_string', '?s rdf:subject ?prototype ; rdf:predicate rdf:type ; rdf:object ?label .')
         if sortby == 'type':
             query = query.replace('order_by', '?label DESC(?memberN)')
         else:
             query = query.replace('order_by', 'DESC(?memberN) ?label')
+        if event_filter:
+            query = query.replace('?label', '')
+        query = query.replace('label_string',
+                              '?s rdf:subject ?prototype ; rdf:predicate rdf:type ; rdf:object ?label .')
     if limit:
         query += " LIMIT " + str(limit)
     if offset:
         query += " OFFSET " + str(offset)
-    for u, l, c in sparql.query(query, namespaces):
+
+    if event_filter:
+        query = query.replace('?label', 'ldcont:' + event_filter)
+        print(query)
+    results = sparql.query(query, namespaces)
+    for r in results:
         sources = []
-        for row in sparql.query(query_sources, namespaces, {'cluster': URIRef(u)}):
+        for row in sparql.query(query_sources, namespaces, {'cluster': r.cluster}):
             sources.append(str(row.source))
+
+        l = event_filter if event_filter else r.label
         if isinstance(l, URIRef):
             _, l = split_uri(l)
-        yield ClusterSummary(u, u.replace('http://www.isi.edu/gaia', '/cluster').replace(
-          'http://www.columbia.edu', '/cluster'), l, c, sources)
+        yield ClusterSummary(r.cluster, r.cluster.replace('http://www.isi.edu/gaia', '/cluster').replace(
+          'http://www.columbia.edu', '/cluster'), l, r.memberN, sources)
 
 
 if __name__ == '__main__':
